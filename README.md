@@ -1137,9 +1137,9 @@ MIT License
 
 ## 社区
 
-- 如果您发现了 bug，请提交 [Issue](https://github.com/your-repo/tablestore-typeorm/issues)
-- 如果您有功能建议，请提交 [Feature Request](https://github.com/your-repo/tablestore-typeorm/issues)
-- 如果您想贡献代码，请提交 [Pull Request](https://github.com/your-repo/tablestore-typeorm/pulls)
+- 如果您发现了 bug，请提交 [Issue](https://github.com/tree-eighteen/tablestore-typeorm/issues)
+- 如果您有功能建议，请提交 [Feature Request](https://github.com/tree-eighteen/tablestore-typeorm/issues)
+- 如果您想贡献代码，请提交 [Pull Request](https://github.com/tree-eighteen/tablestore-typeorm/pulls)
 
 ## 更新日志
 
