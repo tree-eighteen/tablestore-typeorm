@@ -1,0 +1,55 @@
+{
+  "name": "tablestore-typeorm",
+  "description": "A TypeORM-style SDK for Alibaba Cloud Tablestore with decorators, repository pattern, and query builder",
+  "version": "0.0.1",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test:typeorm": "tsc && node dist/examples/typeorm-style-example.js",
+    "test:decorators": "tsc && node dist/examples/advanced-decorators-example.js",
+    "test:pagination": "tsc && node dist/examples/pagination-example.js",
+    "test:where": "tsc && node dist/examples/where-example.js",
+    "test:filter": "tsc && node dist/examples/filter-test.js",
+    "test:transaction": "tsc && node dist/examples/transaction-example.js",
+    "test:transaction-simple": "tsc && node dist/examples/simple-transaction-test.js",
+    "transaction:enable": "tsc && node dist/examples/enable-transaction-helper.js enable",
+    "transaction:test": "tsc && node dist/examples/enable-transaction-helper.js test",
+    "transaction:delete": "tsc && node dist/examples/enable-transaction-helper.js delete",
+    "debug:metadata": "tsc && node dist/examples/debug-metadata.js",
+    "test:example": "tsc && node dist/examples/example.js"
+  },
+  "keywords": [
+    "tablestore",
+    "aliyun",
+    "alibaba-cloud",
+    "typeorm",
+    "orm",
+    "typescript",
+    "nosql",
+    "database",
+    "sdk",
+    "decorators",
+    "repository",
+    "query-builder"
+  ],
+  "dependencies": {
+    "aliyun-tablestore-nodejs-sdk": "^5.5.7",
+    "dotenv": "^16.5.0",
+    "reflect-metadata": "^0.1.14",
+    "zod": "^3.24.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "typescript": "^5.8.3"
+  },
+  "files": [
+    "dist/src/",
+    "LICENSE",
+    "readme.md"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}

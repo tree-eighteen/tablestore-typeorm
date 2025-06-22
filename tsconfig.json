@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2020", // 或更新版本，确保与目标 Node.js 版本兼容
+    "module": "CommonJS", // Node.js 常用模块系统
+    "lib": ["ES2020"], // 根据 target 包含相应的库定义
+    "declaration": true, // 生成 .d.ts 类型声明文件 (!!! 重要)
+    "declarationMap": true, // (可选) 生成 .d.ts.map 文件
+    "sourceMap": true, // 生成 .js.map 文件，便于调试
+    "outDir": "./dist", // 指定编译输出目录
+    "strict": true, // 启用所有严格类型检查选项 (!!! 强烈推荐)
+    "esModuleInterop": true, // 允许从 CommonJS 模块进行默认导入
+    "skipLibCheck": true, // 跳过库声明文件的类型检查，加快编译速度
+    "forceConsistentCasingInFileNames": true, // 强制文件名大小写一致
+    "experimentalDecorators": true, // 启用装饰器支持
+    "emitDecoratorMetadata": true, // 启用装饰器元数据
+    "strictPropertyInitialization": false // 关闭严格属性初始化检查
+    // "moduleResolution": "node", // 模块解析策略，通常默认即可
+  },
+  "include": ["src/**/*", "examples/**/*"], // 同时包含 src 和 examples
+  "exclude": ["node_modules", "dist", "**/*.test.ts"] // 指定排除的文件/目录
+}
