@@ -74,20 +74,34 @@ export function CreateDateColumn(options?: CreateDateColumnOptions): PropertyDec
       },
       from: (value: any) => {
         if (!value) return null;
+
+        // 格式化日期为 "YYYY-M-D HH:mm:ss" 格式
+        const formatDate = (date: Date): string => {
+          const year = date.getFullYear();
+          const month = date.getMonth() + 1;
+          const day = date.getDate();
+          const hours = date.getHours();
+          const minutes = date.getMinutes();
+          const seconds = date.getSeconds();
+
+          return `${year}-${month}-${day} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        };
+
         if (defaultType === Date) {
+          // 即使类型是 Date，也返回格式化的字符串
           if (typeof value === 'number') {
-            return new Date(value);
+            return formatDate(new Date(value));
           }
           if (typeof value === 'string') {
-            return new Date(value);
+            return formatDate(new Date(value));
           }
         }
         if (defaultType === String) {
           if (typeof value === 'number') {
-            return new Date(value).toISOString();
+            return formatDate(new Date(value));
           }
           if (value instanceof Date) {
-            return value.toISOString();
+            return formatDate(value);
           }
         }
         if (defaultType === Number) {

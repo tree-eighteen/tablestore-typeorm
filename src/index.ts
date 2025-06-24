@@ -24,3 +24,6 @@ export * from './filter-factory';
 
 // 事务
 export * from './transaction';
+
+// 基础模型
+export * from './base-model';

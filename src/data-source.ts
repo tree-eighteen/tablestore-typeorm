@@ -4,7 +4,12 @@ import Tablestore from "aliyun-tablestore-nodejs-sdk";
 import { EntityManager } from "./entity-manager";
 import { Repository } from "./repository";
 import { metadataStorage, EntityMetadata } from "./decorators/metadata-storage";
-import { TransactionManager, Transaction, TransactionOptions } from "./transaction";
+import {
+  TransactionManager,
+  Transaction,
+  TransactionOptions,
+} from "./transaction";
+import { BaseModel } from "./base-model";
 
 /**
  * DataSource 配置选项
@@ -16,20 +21,20 @@ export interface DataSourceOptions {
   endpoint: string;
   instancename: string;
   stsToken?: string;
-  
+
   /** 连接选项 */
   maxRetries?: number;
   logger?: Console;
-  
+
   /** 实体类列表 */
-  entities: Function[];
-  
+  entities?: Function[];
+
   /** 是否自动同步表结构 */
   synchronize?: boolean;
-  
+
   /** 是否启用日志 */
   logging?: boolean;
-  
+
   /** 其他 Tablestore 客户端选项 */
   [key: string]: unknown;
 }
@@ -55,16 +60,12 @@ export class DataSource {
    * 验证配置选项
    */
   private validateOptions(): void {
-    const { accessKeyId, secretAccessKey, endpoint, instancename } = this.options;
-    
+    const { accessKeyId, secretAccessKey, endpoint, instancename } =
+      this.options;
     if (!accessKeyId || !secretAccessKey || !endpoint || !instancename) {
       throw new Error(
         "缺少必要的 Tablestore 配置信息 (accessKeyId, secretAccessKey, endpoint, instancename)"
       );
-    }
-
-    if (!this.options.entities || this.options.entities.length === 0) {
-      throw new Error("必须指定至少一个实体类");
     }
   }
 
@@ -92,10 +93,16 @@ export class DataSource {
       this.entityManager = new EntityManager(this);
 
       // 创建 TransactionManager
-      this.transactionManager = new TransactionManager(this.client, this.entityManager);
+      this.transactionManager = new TransactionManager(
+        this.client,
+        this.entityManager
+      );
 
       // 注册实体
       this.registerEntities();
+
+      // 设置 BaseModel 的全局 DataSource
+      BaseModel.setDataSource(this);
 
       // 如果启用了同步，则同步表结构
       if (this.options.synchronize) {
@@ -103,14 +110,18 @@ export class DataSource {
       }
 
       this.isInitialized = true;
-      
+
       if (this.options.logging) {
         console.log("DataSource 初始化成功");
       }
 
       return this;
     } catch (error) {
-      throw new Error(`DataSource 初始化失败: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `DataSource 初始化失败: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -118,7 +129,7 @@ export class DataSource {
    * 注册实体
    */
   private registerEntities(): void {
-    for (const entity of this.options.entities) {
+    for (const entity of this.options.entities || []) {
       const metadata = metadataStorage.getEntityMetadata(entity);
       if (!metadata) {
         throw new Error(`实体 ${entity.name} 没有被 @Entity 装饰器标记`);
@@ -138,14 +149,14 @@ export class DataSource {
       throw new Error("客户端未初始化");
     }
 
-    for (const entity of this.options.entities) {
+    for (const entity of this.options.entities || []) {
       const metadata = metadataStorage.getEntityMetadata(entity);
       if (!metadata) continue;
 
       try {
         // 检查表是否存在
         await this.client.describeTable({ tableName: metadata.tableName });
-        
+
         if (this.options.logging) {
           console.log(`表 ${metadata.tableName} 已存在`);
         }
@@ -168,24 +179,24 @@ export class DataSource {
 
     const primaryKeyColumns = metadata.primaryColumns.map((column: any) => ({
       name: column.propertyName,
-      type: this.getTablestorePrimaryKeyType(column.tablestoreType || 'STRING')
+      type: this.getTablestorePrimaryKeyType(column.tablestoreType || "STRING"),
     }));
 
     const createParams = {
       tableMeta: {
         tableName: metadata.tableName,
-        primaryKey: primaryKeyColumns
+        primaryKey: primaryKeyColumns,
       },
       reservedThroughput: {
         capacityUnit: {
           read: metadata.reservedThroughput?.read || 0,
-          write: metadata.reservedThroughput?.write || 0
-        }
+          write: metadata.reservedThroughput?.write || 0,
+        },
       },
       tableOptions: {
         timeToLive: metadata.tableOptions?.timeToLive || -1,
-        maxVersions: metadata.tableOptions?.maxVersions || 1
-      }
+        maxVersions: metadata.tableOptions?.maxVersions || 1,
+      },
     };
 
     await this.client.createTable(createParams);
@@ -212,7 +223,7 @@ export class DataSource {
         await this.client.describeTable({ tableName });
         return;
       } catch {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         attempts++;
       }
     }
@@ -225,11 +236,11 @@ export class DataSource {
    */
   private getTablestorePrimaryKeyType(type: string): any {
     switch (type) {
-      case 'STRING':
+      case "STRING":
         return Tablestore.PrimaryKeyType.STRING;
-      case 'INTEGER':
+      case "INTEGER":
         return Tablestore.PrimaryKeyType.INTEGER;
-      case 'BINARY':
+      case "BINARY":
         return Tablestore.PrimaryKeyType.BINARY;
       default:
         return Tablestore.PrimaryKeyType.STRING;
@@ -304,7 +315,11 @@ export class DataSource {
     partitionKey: Record<string, any>,
     options?: TransactionOptions
   ): Promise<Transaction> {
-    return this.getTransactionManager().startTransaction(tableName, partitionKey, options);
+    return this.getTransactionManager().startTransaction(
+      tableName,
+      partitionKey,
+      options
+    );
   }
 
   /**
@@ -330,13 +345,21 @@ export class DataSource {
     callback: (transaction: Transaction) => Promise<T>,
     options?: TransactionOptions
   ): Promise<T> {
-    return this.getTransactionManager().runInTransaction(tableName, partitionKey, callback, options);
+    return this.getTransactionManager().runInTransaction(
+      tableName,
+      partitionKey,
+      callback,
+      options
+    );
   }
 
   /**
    * 销毁 DataSource
    */
   async destroy(): Promise<void> {
+    // 清理 BaseModel 的 DataSource 引用
+    BaseModel.setDataSource(null as any);
+
     this.client = null;
     this.entityManager = null;
     this.transactionManager = null;

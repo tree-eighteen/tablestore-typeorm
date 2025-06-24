@@ -211,8 +211,8 @@ export class Repository<T extends object> {
   async update(
     primaryKeys: Partial<T>,
     partialEntity: Partial<T>
-  ): Promise<void> {
-    await this.entityManager.update(
+  ): Promise<T> {
+    return await this.entityManager.update(
       this.entityClass,
       primaryKeys,
       partialEntity

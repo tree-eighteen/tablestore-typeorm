@@ -362,6 +362,7 @@ console.log(filteredPage.nextCursor); // 下一页游标
 ## 过滤器详解
 
 FilterFactory 提供了丰富的查询条件构建方法：
+注意，他的作用是在本地过滤的，如果范围查询不到就无法过滤，建议还是二级索引。
 
 ### 比较操作
 

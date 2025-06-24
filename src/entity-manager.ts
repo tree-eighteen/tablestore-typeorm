@@ -44,6 +44,21 @@ export class EntityManager {
       returnContent: { returnType: Tablestore.ReturnType.Primarykey }
     });
 
+    // 重新查询实体以获取正确的格式化值
+    const primaryKeyValues: Partial<T> = {};
+    for (const column of metadata.primaryColumns) {
+      const value = (entity as any)[column.propertyName];
+      if (value !== undefined && value !== null) {
+        (primaryKeyValues as any)[column.propertyName] = value;
+      }
+    }
+
+    const savedEntity = await this.findOne(entityClass, primaryKeyValues);
+    if (savedEntity) {
+      return savedEntity;
+    }
+
+    // 如果查询失败，返回原始实体
     return entity;
   }
 
@@ -141,7 +156,7 @@ export class EntityManager {
     entityClass: new () => T,
     primaryKeys: Partial<T>,
     partialEntity: Partial<T>
-  ): Promise<void> {
+  ): Promise<T> {
     const metadata = this.getEntityMetadata(entityClass);
     const client = this.dataSource.getClient();
 
@@ -166,6 +181,15 @@ export class EntityManager {
       updateOfAttributeColumns,
       returnContent: { returnType: Tablestore.ReturnType.Primarykey }
     });
+
+    // 重新查询更新后的实体以获取正确的格式化值
+    const updatedEntity = await this.findOne(entityClass, primaryKeys);
+    if (updatedEntity) {
+      return updatedEntity;
+    }
+
+    // 如果查询失败，抛出错误
+    throw new Error('更新后无法查询到实体');
   }
 
   /**
@@ -370,24 +394,33 @@ export class EntityManager {
   private convertValueToTablestore(value: any, column: ColumnMetadata): any {
     // 如果有自定义转换器，使用转换器
     if (column.transformer?.to) {
-      return column.transformer.to(value);
+      const transformedValue = column.transformer.to(value);
+
+      // 如果转换器返回的是时间戳数字，确保作为整数存储
+      if (column.tablestoreType === 'INTEGER' && typeof transformedValue === 'number') {
+        return Tablestore.Long.fromNumber(Math.floor(transformedValue));
+      }
+
+      return transformedValue;
     }
 
     // 根据类型进行转换
     if (column.type === Number) {
-      return typeof value === 'number' && Number.isInteger(value) 
+      return typeof value === 'number' && Number.isInteger(value)
         ? Tablestore.Long.fromNumber(value)
         : Number(value);
     }
-    
+
     if (column.type === Date) {
-      return Tablestore.Long.fromNumber(value instanceof Date ? value.getTime() : new Date(value).getTime());
+      // 确保时间戳作为整数存储
+      const timestamp = value instanceof Date ? value.getTime() : new Date(value).getTime();
+      return Tablestore.Long.fromNumber(Math.floor(timestamp));
     }
-    
+
     if (column.type === Boolean) {
       return Boolean(value);
     }
-    
+
     if (typeof value === 'object' && value !== null) {
       return JSON.stringify(value);
     }
@@ -401,33 +434,69 @@ export class EntityManager {
   private convertValueFromTablestore(value: any, column: ColumnMetadata): any {
     // 如果有自定义转换器，使用转换器
     if (column.transformer?.from) {
-      return column.transformer.from(value);
+      return column.transformer.from(this.extractTablestoreValue(value));
     }
 
-    const stringValue = value?.toString() || '';
+    // 提取 Tablestore 的实际值
+    const actualValue = this.extractTablestoreValue(value);
 
     // 根据类型进行转换
     if (column.type === Number) {
-      return Number(stringValue);
+      return Number(actualValue);
     }
-    
+
     if (column.type === Date) {
-      return new Date(Number(stringValue));
+      // 格式化日期为 "YYYY-M-D HH:mm:ss" 格式
+      const date = new Date(Number(actualValue));
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const day = date.getDate();
+      const hours = date.getHours();
+      const minutes = date.getMinutes();
+      const seconds = date.getSeconds();
+
+      return `${year}-${month}-${day} ${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
     }
-    
+
     if (column.type === Boolean) {
+      const stringValue = actualValue?.toString() || '';
       return Boolean(stringValue === 'true' || stringValue === '1');
     }
-    
+
     if (column.type === Object || column.type === Array) {
       try {
+        const stringValue = actualValue?.toString() || '';
         return JSON.parse(stringValue);
       } catch {
-        return stringValue;
+        return actualValue;
       }
     }
 
-    return stringValue;
+    return actualValue?.toString() || '';
+  }
+
+  /**
+   * 提取 Tablestore 值的实际内容
+   * 处理 Int64、Long 等特殊类型
+   */
+  private extractTablestoreValue(value: any): any {
+    if (value === null || value === undefined) {
+      return value;
+    }
+
+    // 处理 Tablestore 的 Int64/Long 类型
+    if (value && typeof value === 'object' && 'buffer' in value && 'offset' in value) {
+      // 这是 Tablestore 的 Int64 对象
+      return Number(value.toString());
+    }
+
+    // 处理其他可能的 Long 类型
+    if (value && typeof value === 'object' && typeof value.toNumber === 'function') {
+      return value.toNumber();
+    }
+
+    // 处理普通值
+    return value;
   }
 
   /**

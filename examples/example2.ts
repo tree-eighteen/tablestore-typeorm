@@ -7,18 +7,27 @@ import {
   UpdateDateColumn,
   DataSource,
   DataSourceOptions,
-  FilterFactory,
+  BaseModel,
 } from "../src";
 
 config();
 
-@Entity("users_index")
-class Users {
+@Entity("users_email_index")
+class UsersEmailIndex extends BaseModel {
   @PrimaryColumn()
   email: string;
 
   @PrimaryColumn()
   id: string;
+}
+
+@Entity("interactive_bulk_users_table")
+class Users extends BaseModel {
+  @PrimaryColumn()
+  id: string;
+
+  @Column()
+  email: string;
 
   @Column()
   name: string;
@@ -26,8 +35,8 @@ class Users {
   @Column()
   age: number;
 
-  @Column({ nullable: true })
-  phone?: string;
+  @Column()
+  phone: string;
 
   @Column()
   city: string;
@@ -39,16 +48,16 @@ class Users {
   salary: number;
 
   @Column()
-  joinDate: string;
+  joinDate: Date;
 
   @Column()
   isActive: boolean;
 
   @CreateDateColumn()
-  createdAt: Date;
+  created: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated: Date;
 }
 
 // 配置数据源
@@ -57,16 +66,27 @@ const dataSourceOptions: DataSourceOptions = {
   secretAccessKey: process.env.ALIYUN_ACCESS_KEY_SECRET || "",
   endpoint: process.env.TABLE_STORE_ENDPOINT || "",
   instancename: process.env.TABLE_STORE_INSTANCE_NAME || "",
-  entities: [Users],
 };
 
 (async () => {
   const dataSource = new DataSource(dataSourceOptions);
   await dataSource.initialize();
-  const UsersModel = dataSource.getRepository(Users);
-  const result = await UsersModel.createQueryBuilder()
-    .select(["email", 'name'])
-    .where({ email: "user100000@outlook.com" })
-    .getOne();
-  console.log(result);
+  // const result = await UsersEmailIndex.findOne({
+  //   email: "user300079@qq.com",
+  // });
+
+  // const userInfo = await Users.findOne({
+  //   id: 'fdsafdsafdsa'
+  // })
+
+  // console.log(userInfo);
+
+  const result2 = await Users.update(
+    { id: "fdsafdsafdsa" },
+    {
+      email: "123@qq.com",
+    }
+  );
+
+  console.log(result2);
 })();
