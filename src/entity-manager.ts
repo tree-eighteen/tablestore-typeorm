@@ -49,31 +49,62 @@ export class EntityManager {
 
   /**
    * 根据主键查找实体
+   * 如果提供完整主键，使用精确查询（getRow）
+   * 如果提供部分主键，使用范围查询（getRange）返回第一个匹配的实体
    */
   async findOne<T>(entityClass: new () => T, primaryKeys: Partial<T>): Promise<T | null> {
     const metadata = this.getEntityMetadata(entityClass);
     const client = this.dataSource.getClient();
-    
-    // 转换主键为 Tablestore 格式
-    const tablestorePrimaryKey = this.convertPrimaryKeysToTablestore(primaryKeys, metadata);
-    
-    try {
-      const response = await client.getRow({
-        tableName: metadata.tableName,
-        primaryKey: tablestorePrimaryKey
-      });
 
-      if (!response?.row || !response.row.primaryKey) {
-        return null;
-      }
+    // 检查是否提供了完整的主键
+    const isCompletePrimaryKey = this.isCompletePrimaryKey(primaryKeys, metadata);
 
-      // 转换 Tablestore 数据为实体
-      return this.convertTablestoreToEntity(response.row, entityClass, metadata);
-    } catch (error) {
-      if (this.isRowNotFoundError(error)) {
-        return null;
+    if (isCompletePrimaryKey) {
+      // 完整主键，使用精确查询
+      const tablestorePrimaryKey = this.convertPrimaryKeysToTablestore(primaryKeys, metadata);
+
+      try {
+        const response = await client.getRow({
+          tableName: metadata.tableName,
+          primaryKey: tablestorePrimaryKey
+        });
+
+        if (!response?.row || !response.row.primaryKey) {
+          return null;
+        }
+
+        return this.convertTablestoreToEntity(response.row, entityClass, metadata);
+      } catch (error) {
+        if (this.isRowNotFoundError(error)) {
+          return null;
+        }
+        throw error;
       }
-      throw error;
+    } else {
+      // 部分主键，使用范围查询
+      const startPrimaryKey = this.autoCompletePartialPrimaryKey(primaryKeys, metadata, true);
+      const endPrimaryKey = this.autoCompletePartialPrimaryKey(primaryKeys, metadata, false);
+
+      try {
+        const response = await client.getRange({
+          tableName: metadata.tableName,
+          direction: Tablestore.Direction.FORWARD,
+          inclusiveStartPrimaryKey: startPrimaryKey,
+          exclusiveEndPrimaryKey: endPrimaryKey,
+          limit: 1
+        });
+
+        if (!response?.rows || response.rows.length === 0) {
+          return null;
+        }
+
+        return this.convertTablestoreToEntity(response.rows[0], entityClass, metadata);
+      } catch (error) {
+        if (this.isRowNotFoundError(error)) {
+          return null;
+        }
+        throw error;
+      }
     }
   }
 
@@ -183,7 +214,11 @@ export class EntityManager {
   /**
    * 转换主键为 Tablestore 格式
    */
-  private convertPrimaryKeysToTablestore<T>(primaryKeys: Partial<T>, metadata: EntityMetadata): Tablestore.PrimaryKeyInput {
+  private convertPrimaryKeysToTablestore<T>(
+    primaryKeys: Partial<T>,
+    metadata: EntityMetadata,
+    allowPartial: boolean = false
+  ): Tablestore.PrimaryKeyInput {
     const tablestorePrimaryKey: Tablestore.PrimaryKeyInput = [];
 
     for (const column of metadata.primaryColumns) {
@@ -192,8 +227,70 @@ export class EntityManager {
         tablestorePrimaryKey.push({
           [column.propertyName]: this.convertValueToTablestore(value, column)
         });
-      } else {
+      } else if (!allowPartial) {
         throw new Error(`主键 ${column.propertyName} 不能为空`);
+      } else {
+        // 如果允许部分主键且当前主键为空，则停止添加后续主键
+        break;
+      }
+    }
+
+    return tablestorePrimaryKey;
+  }
+
+  /**
+   * 转换部分主键为 Tablestore 格式（用于范围查询）
+   */
+  convertPartialPrimaryKeysToTablestore<T>(primaryKeys: Partial<T>, metadata: EntityMetadata): Tablestore.PrimaryKeyInput {
+    return this.convertPrimaryKeysToTablestore(primaryKeys, metadata, true);
+  }
+
+  /**
+   * 检查是否提供了完整的主键
+   */
+  isCompletePrimaryKey<T>(primaryKeys: Partial<T>, metadata: EntityMetadata): boolean {
+    for (const column of metadata.primaryColumns) {
+      const value = (primaryKeys as any)[column.propertyName];
+      if (value === undefined || value === null) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /**
+   * 自动补充部分主键为完整的范围主键
+   *
+   * 例如：主键为 [userId, id]，提供 { userId: "user1" }
+   * - 起始主键：[userId="user1", id=INF_MIN]
+   * - 结束主键：[userId="user1", id=INF_MAX]
+   */
+  autoCompletePartialPrimaryKey<T>(
+    partialKeys: Partial<T>,
+    metadata: EntityMetadata,
+    isStart: boolean
+  ): Tablestore.PrimaryKeyInput {
+    const tablestorePrimaryKey: Tablestore.PrimaryKeyInput = [];
+
+    for (const column of metadata.primaryColumns) {
+      const value = (partialKeys as any)[column.propertyName];
+
+      if (value !== undefined && value !== null) {
+        // 有值的主键：起始和结束都使用精确值
+        tablestorePrimaryKey.push({
+          [column.propertyName]: this.convertValueToTablestore(value, column)
+        });
+      } else {
+        // 缺失的主键：起始用 INF_MIN，结束用 INF_MAX
+        if (isStart) {
+          tablestorePrimaryKey.push({
+            [column.propertyName]: Tablestore.INF_MIN
+          });
+        } else {
+          tablestorePrimaryKey.push({
+            [column.propertyName]: Tablestore.INF_MAX
+          });
+        }
       }
     }
 

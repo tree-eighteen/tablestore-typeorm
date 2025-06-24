@@ -125,8 +125,7 @@ export class Repository<T extends object> {
     const queryBuilder = this.createQueryBuilder();
 
     if (options?.where) {
-      // 这里需要实现 where 条件的转换
-      // 暂时简化处理
+      queryBuilder.where(options.where);
     }
 
     if (options?.take) {

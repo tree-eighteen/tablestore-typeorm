@@ -18,7 +18,8 @@
     "transaction:test": "tsc && node dist/examples/enable-transaction-helper.js test",
     "transaction:delete": "tsc && node dist/examples/enable-transaction-helper.js delete",
     "debug:metadata": "tsc && node dist/examples/debug-metadata.js",
-    "test:example": "tsc && node dist/examples/example.js"
+    "test:example": "tsc && node dist/examples/example.js",
+    "test:example2": "tsc && node dist/examples/example2.js"
   },
   "keywords": [
     "tablestore",

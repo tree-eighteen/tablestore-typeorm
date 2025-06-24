@@ -212,33 +212,65 @@ export class Transaction {
 
   /**
    * 在事务中查找实体
+   * 如果提供完整主键，使用精确查询（getRow）
+   * 如果提供部分主键，使用范围查询（getRange）返回第一个匹配的实体
    */
   async findOne<T>(entityClass: new () => T, primaryKeys: Partial<T>): Promise<T | null> {
     this.ensureActive();
 
     const metadata = (this.entityManager as any).getEntityMetadata(entityClass);
 
-    // 转换主键
-    const tablestorePrimaryKey = (this.entityManager as any).convertPrimaryKeysToTablestore(primaryKeys, metadata);
+    // 检查是否提供了完整的主键
+    const isCompletePrimaryKey = this.entityManager.isCompletePrimaryKey(primaryKeys, metadata);
 
-    try {
-      const response = await this.client.getRow({
-        tableName: metadata.tableName,
-        primaryKey: tablestorePrimaryKey,
-        transactionId: this.transactionId
-      });
+    if (isCompletePrimaryKey) {
+      // 完整主键，使用精确查询
+      const tablestorePrimaryKey = (this.entityManager as any).convertPrimaryKeysToTablestore(primaryKeys, metadata);
 
-      if (!response?.row || !response.row.primaryKey) {
-        return null;
+      try {
+        const response = await this.client.getRow({
+          tableName: metadata.tableName,
+          primaryKey: tablestorePrimaryKey,
+          transactionId: this.transactionId
+        });
+
+        if (!response?.row || !response.row.primaryKey) {
+          return null;
+        }
+
+        return (this.entityManager as any).convertTablestoreToEntity(response.row, entityClass, metadata);
+      } catch (error) {
+        if ((this.entityManager as any).isRowNotFoundError(error)) {
+          return null;
+        }
+        throw error;
       }
+    } else {
+      // 部分主键，使用范围查询
+      const startPrimaryKey = this.entityManager.autoCompletePartialPrimaryKey(primaryKeys, metadata, true);
+      const endPrimaryKey = this.entityManager.autoCompletePartialPrimaryKey(primaryKeys, metadata, false);
 
-      // 转换数据
-      return (this.entityManager as any).convertTablestoreToEntity(response.row, entityClass, metadata);
-    } catch (error) {
-      if ((this.entityManager as any).isRowNotFoundError(error)) {
-        return null;
+      try {
+        const response = await this.client.getRange({
+          tableName: metadata.tableName,
+          direction: Tablestore.Direction.FORWARD,
+          inclusiveStartPrimaryKey: startPrimaryKey,
+          exclusiveEndPrimaryKey: endPrimaryKey,
+          limit: 1,
+          transactionId: this.transactionId
+        });
+
+        if (!response?.rows || response.rows.length === 0) {
+          return null;
+        }
+
+        return (this.entityManager as any).convertTablestoreToEntity(response.rows[0], entityClass, metadata);
+      } catch (error) {
+        if ((this.entityManager as any).isRowNotFoundError(error)) {
+          return null;
+        }
+        throw error;
       }
-      throw error;
     }
   }
 
