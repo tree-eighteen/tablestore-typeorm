@@ -182,14 +182,8 @@ export class EntityManager {
       returnContent: { returnType: Tablestore.ReturnType.Primarykey }
     });
 
-    // 重新查询更新后的实体以获取正确的格式化值
-    const updatedEntity = await this.findOne(entityClass, primaryKeys);
-    if (updatedEntity) {
-      return updatedEntity;
-    }
-
-    // 如果查询失败，抛出错误
-    throw new Error('更新后无法查询到实体');
+    // 直接返回主键信息
+    return primaryKeys as T;
   }
 
   /**
